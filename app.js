@@ -663,9 +663,40 @@ renderList();
 renderPantryChips();
 showView("list");
 
+function refreshCurrentView() {
+  if (currentView.mode === "list") {
+    renderList();
+  } else if (currentView.mode === "detail") {
+    if (recipes.some((r) => r.id === editingId)) {
+      renderDetail(editingId);
+    } else {
+      // recipe was deleted from another device
+      showView("list");
+      renderList();
+    }
+  }
+  // never touch the form while the user is actively editing
+}
+
+function autoPullIfSafe() {
+  if (!isSyncConfigured()) return;
+  if (currentView.mode === "form" || currentView.mode === "sync") return;
+  pullFromGist({ silent: true }).then(refreshCurrentView);
+}
+
 if (isSyncConfigured()) {
   pullFromGist().then(() => renderList());
 }
+
+// Re-sync whenever the app regains focus or comes back to the foreground
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") autoPullIfSafe();
+});
+window.addEventListener("focus", autoPullIfSafe);
+
+// Poll periodically while the app stays open, in case another device
+// makes a change without this device ever losing focus
+setInterval(autoPullIfSafe, 45000);
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
