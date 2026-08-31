@@ -220,6 +220,23 @@ button, input, select, textarea { font-family: inherit; }
 .detail-body { padding: 20px 22px 28px; }
 .detail-title { font-family: 'Fraunces', serif; font-size: 28px; margin: 6px 0 10px; line-height: 1.15; }
 .detail-meta { margin-bottom: 4px; }
+
+.quicknotes-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.quicknote-card {
+  display: flex; align-items: center; gap: 10px;
+  background: linear-gradient(135deg, rgba(217,164,65,0.16), rgba(193,98,45,0.10));
+  border: 1px solid rgba(193,98,45,0.28);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+.quicknote-icon { color: var(--rust); flex-shrink: 0; display: flex; }
+.quicknote-text { display: flex; flex-direction: column; line-height: 1.25; }
+.quicknote-label {
+  font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--rust); font-weight: 600;
+}
+.quicknote-value { font-size: 15px; font-weight: 600; color: var(--ink); }
+
 .detail-columns { display: grid; grid-template-columns: 1fr 1.3fr; gap: 28px; margin-top: 22px; }
 .detail-h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-soft); margin: 0 0 12px; font-weight: 700; }
 .ing-checklist { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }

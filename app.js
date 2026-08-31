@@ -199,6 +199,21 @@ function matchRingSVG(pct) {
     </svg>`;
 }
 
+const QUICKNOTE_ICONS = {
+  flame: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>`,
+  snow: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="22"/><line x1="4.9" y1="6" x2="19.1" y2="18"/><line x1="4.9" y1="18" x2="19.1" y2="6"/><path d="m9 4 3-2 3 2"/><path d="m9 20 3 2 3-2"/></svg>`,
+  clock: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+  default: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4v10.5a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/></svg>`,
+};
+
+function quickNoteIcon(label) {
+  const l = normalize(label);
+  if (l.includes("forno") || l.includes("padella") || l.includes("griglia") || l.includes("fuoco")) return QUICKNOTE_ICONS.flame;
+  if (l.includes("frigo") || l.includes("freez") || l.includes("congel") || l.includes("freddo")) return QUICKNOTE_ICONS.snow;
+  if (l.includes("ripos") || l.includes("lievit") || l.includes("attesa") || l.includes("marinat") || l.includes("tempo")) return QUICKNOTE_ICONS.clock;
+  return QUICKNOTE_ICONS.default;
+}
+
 function escapeHtml(str) {
   return (str || "").replace(/[&<>"']/g, (c) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
@@ -337,6 +352,17 @@ function renderDetail(id) {
     ? `<div class="tag-list" style="margin-top:10px">${recipe.tags.map((t) => `<span class="tag-chip static">${escapeHtml(t)}</span>`).join("")}</div>`
     : "";
 
+  const quickNotesHtml = (recipe.quickNotes || []).length
+    ? `<div class="quicknotes-row">${recipe.quickNotes.map((n) => `
+        <div class="quicknote-card">
+          <div class="quicknote-icon">${quickNoteIcon(n.label)}</div>
+          <div class="quicknote-text">
+            <span class="quicknote-label">${escapeHtml(n.label)}</span>
+            <span class="quicknote-value">${escapeHtml(n.value)}</span>
+          </div>
+        </div>`).join("")}</div>`
+    : "";
+
   const ingredientsHtml = recipe.ingredients.map((ing) => {
     const inPantry = pantrySet.some((p) => normalize(ing.name).includes(p) || p.includes(normalize(ing.name)));
     return `
@@ -358,6 +384,7 @@ function renderDetail(id) {
       ${score ? `<span class="idx-meta-item">🧺 ${score.have}/${score.total} in dispensa</span>` : ""}
     </div>
     ${tagsHtml}
+    ${quickNotesHtml}
     <div class="detail-columns">
       <div class="detail-col">
         <h4 class="detail-h4">Ingredienti</h4>
@@ -396,7 +423,20 @@ function deleteCurrentRecipe() {
 const ingredientsListEl = document.getElementById("ingredients-list");
 const stepsListEl = document.getElementById("steps-list");
 const tagsListEl = document.getElementById("tags-list");
+const quicknotesListEl = document.getElementById("quicknotes-list");
 let formTags = [];
+
+function createQuickNoteRow(label = "", value = "") {
+  const row = document.createElement("div");
+  row.className = "ing-row";
+  row.innerHTML = `
+    <input class="input" style="width:110px;flex-shrink:0" placeholder="Forno" value="${escapeHtml(label)}" data-field="label" />
+    <input class="input" placeholder="180°C statico, 25 min" value="${escapeHtml(value)}" data-field="value" />
+    <button class="icon-btn subtle" type="button" aria-label="Rimuovi info rapida">✕</button>
+  `;
+  row.querySelector("button").addEventListener("click", () => row.remove());
+  return row;
+}
 
 function createIngredientRow(qty = "", name = "") {
   const row = document.createElement("div");
@@ -466,6 +506,10 @@ function resetForm(recipe) {
   const ings = isEdit && recipe.ingredients.length ? recipe.ingredients : [{ qty: "", name: "" }];
   ings.forEach((ing) => ingredientsListEl.appendChild(createIngredientRow(ing.qty, ing.name)));
 
+  quicknotesListEl.innerHTML = "";
+  const notes = isEdit ? (recipe.quickNotes || []) : [];
+  notes.forEach((n) => quicknotesListEl.appendChild(createQuickNoteRow(n.label, n.value)));
+
   stepsListEl.innerHTML = "";
   const steps = isEdit && recipe.steps.length ? recipe.steps : [""];
   steps.forEach((s, i) => stepsListEl.appendChild(createStepRow(s, i + 1)));
@@ -490,6 +534,11 @@ function collectFormData() {
     name: row.querySelector('[data-field="name"]').value.trim(),
   })).filter((i) => i.name);
 
+  const quickNotes = Array.from(quicknotesListEl.querySelectorAll(".ing-row")).map((row) => ({
+    label: row.querySelector('[data-field="label"]').value.trim(),
+    value: row.querySelector('[data-field="value"]').value.trim(),
+  })).filter((n) => n.label && n.value);
+
   const steps = Array.from(stepsListEl.querySelectorAll('[data-field="step"]'))
     .map((t) => t.value.trim())
     .filter(Boolean);
@@ -501,6 +550,7 @@ function collectFormData() {
     servings: parseInt(document.getElementById("form-servings").value) || 1,
     time: document.getElementById("form-time").value.trim(),
     tags: [...formTags],
+    quickNotes,
     ingredients,
     steps,
     createdAt: Date.now(),
@@ -559,6 +609,9 @@ document.getElementById("form-title").addEventListener("input", validateForm);
 document.getElementById("add-ingredient-btn").addEventListener("click", () => {
   ingredientsListEl.appendChild(createIngredientRow());
   validateForm();
+});
+document.getElementById("add-quicknote-btn").addEventListener("click", () => {
+  quicknotesListEl.appendChild(createQuickNoteRow());
 });
 document.getElementById("add-step-btn").addEventListener("click", () => {
   stepsListEl.appendChild(createStepRow("", stepsListEl.children.length + 1));
