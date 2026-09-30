@@ -289,6 +289,7 @@ function renderList() {
       <button class="idx-card" style="transform: rotate(${tilt}deg)" data-open="${r.id}">
         <div class="idx-hole"></div>
         <div class="idx-perf"></div>
+        ${r.link ? `<div class="idx-video-badge" title="Contiene un video">${PLATFORM_ICONS.play}</div>` : ""}
         <div class="idx-card-inner">
           <div class="idx-card-top">
             <span class="idx-cat">${escapeHtml(r.category)}</span>
@@ -342,6 +343,62 @@ function openDetail(id) {
   renderDetail(id);
 }
 
+// ---------- Link preview ----------
+const PLATFORM_ICONS = {
+  play: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>`,
+  camera: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="15" height="12" rx="2"/><path d="M18 9.5 22 7v10l-4-2.5"/></svg>`,
+  link: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0L4.1 13.83a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg>`,
+};
+
+function platformInfo(url) {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    if (host.includes("tiktok.com")) return { name: "TikTok", key: "tiktok", icon: PLATFORM_ICONS.play, oembed: "https://www.tiktok.com/oembed?url=" };
+    if (host.includes("youtube.com") || host.includes("youtu.be")) return { name: "YouTube", key: "youtube", icon: PLATFORM_ICONS.play, oembed: "https://www.youtube.com/oembed?format=json&url=" };
+    if (host.includes("instagram.com")) return { name: "Instagram", key: "instagram", icon: PLATFORM_ICONS.camera, oembed: null };
+    return { name: host, key: "generic", icon: PLATFORM_ICONS.link, oembed: null };
+  } catch (e) {
+    return { name: "Link", key: "generic", icon: PLATFORM_ICONS.link, oembed: null };
+  }
+}
+
+function linkPreviewFallbackHtml(url) {
+  const p = platformInfo(url);
+  return `
+    <a class="link-preview-card" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">
+      <div class="link-preview-icon">${p.icon}</div>
+      <div class="link-preview-text">
+        <span class="link-preview-platform">${escapeHtml(p.name)}</span>
+        <span class="link-preview-cta">Apri il link ↗</span>
+      </div>
+    </a>`;
+}
+
+// Tries to upgrade the fallback card with a real thumbnail + title via oEmbed.
+// Silently gives up (keeping the fallback) if the platform doesn't support it
+// or the request fails (offline, CORS, link removed, etc).
+async function enhanceLinkPreview(url) {
+  const p = platformInfo(url);
+  if (!p.oembed) return;
+  const box = document.getElementById("link-preview-box");
+  if (!box) return;
+  try {
+    const res = await fetch(p.oembed + encodeURIComponent(url));
+    if (!res.ok) return;
+    const data = await res.json();
+    box.innerHTML = `
+      <a class="link-preview-card rich" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">
+        ${data.thumbnail_url ? `<img class="link-preview-thumb" src="${escapeHtml(data.thumbnail_url)}" alt="" loading="lazy" />` : `<div class="link-preview-icon">${p.icon}</div>`}
+        <div class="link-preview-text">
+          <span class="link-preview-platform">${escapeHtml(p.name)}${data.author_name ? " · " + escapeHtml(data.author_name) : ""}</span>
+          <span class="link-preview-title">${escapeHtml(data.title || "Guarda il video")}</span>
+        </div>
+      </a>`;
+  } catch (e) {
+    // offline or blocked — fallback card already shown, nothing to do
+  }
+}
+
 function renderDetail(id) {
   const recipe = recipes.find((r) => r.id === id);
   if (!recipe) { showView("list"); return; }
@@ -384,6 +441,7 @@ function renderDetail(id) {
       ${score ? `<span class="idx-meta-item">🧺 ${score.have}/${score.total} in dispensa</span>` : ""}
     </div>
     ${tagsHtml}
+    ${recipe.link ? `<div id="link-preview-box">${linkPreviewFallbackHtml(recipe.link)}</div>` : ""}
     ${quickNotesHtml}
     <div class="detail-columns">
       <div class="detail-col">
@@ -406,6 +464,8 @@ function renderDetail(id) {
         : "";
     });
   });
+
+  if (recipe.link) enhanceLinkPreview(recipe.link);
 }
 
 function deleteCurrentRecipe() {
@@ -501,6 +561,7 @@ function resetForm(recipe) {
   document.getElementById("form-category").value = isEdit ? recipe.category : "Primo";
   document.getElementById("form-servings").value = isEdit ? recipe.servings : 4;
   document.getElementById("form-time").value = isEdit ? recipe.time : "";
+  document.getElementById("form-link").value = isEdit ? (recipe.link || "") : "";
 
   ingredientsListEl.innerHTML = "";
   const ings = isEdit && recipe.ingredients.length ? recipe.ingredients : [{ qty: "", name: "" }];
@@ -549,6 +610,7 @@ function collectFormData() {
     category: document.getElementById("form-category").value,
     servings: parseInt(document.getElementById("form-servings").value) || 1,
     time: document.getElementById("form-time").value.trim(),
+    link: document.getElementById("form-link").value.trim(),
     tags: [...formTags],
     quickNotes,
     ingredients,
